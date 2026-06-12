@@ -1192,6 +1192,18 @@
     opacity: 0.25;
   }
 
+  @property --cursor-ring-angle {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0deg;
+  }
+
+  @property --cursor-ring-scale {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 1;
+  }
+
   .cursor-ident__ring,
   .cursor-ident__core {
     position: absolute;
@@ -1221,10 +1233,8 @@
     border-radius: 50%;
     filter: drop-shadow(0 0 8px color-mix(in srgb, currentColor 30%, transparent));
     mask: radial-gradient(circle, transparent 0 51%, #000 52% 100%);
-    scale: var(--cursor-ring-scale);
-    transform: none;
+    transform: translate(-50%, -50%) rotate(var(--cursor-ring-angle)) scale(var(--cursor-ring-scale));
     transform-origin: center;
-    translate: -50% -50%;
   }
 
   .cursor-ident__ring::before,
@@ -1264,11 +1274,11 @@
 
   @keyframes cursor-ring-spin {
     from {
-      rotate: 0deg;
+      --cursor-ring-angle: 0deg;
     }
 
     to {
-      rotate: 360deg;
+      --cursor-ring-angle: 360deg;
     }
   }
 
@@ -1288,15 +1298,15 @@
 
   @keyframes cursor-white-ring-pulse {
     0% {
-      scale: 0.62;
+      --cursor-ring-scale: 0.62;
     }
 
     50% {
-      scale: 0.72;
+      --cursor-ring-scale: 0.72;
     }
 
     100% {
-      scale: 0.62;
+      --cursor-ring-scale: 0.62;
     }
   }
 
