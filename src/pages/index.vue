@@ -175,7 +175,7 @@
       <div v-show="showTerminalBackdrop" class="terminal-backdrop" aria-hidden="true" />
 
       <div v-show="showLoading" class="terminal-loading" aria-live="polite">
-        <span>Welcome User. Please wait.</span>
+        <span>Welcome User, Please wait.</span>
       </div>
 
       <div class="hud hud--float" aria-hidden="true">
@@ -239,7 +239,7 @@
   }
 
   const setVideoPlaybackSpeed = () => {
-    if (videoRef.value) videoRef.value.playbackRate = 1
+    if (videoRef.value) videoRef.value.playbackRate = 0.95
   }
 
   const getSplashPanelWidth = () => (
@@ -473,6 +473,8 @@
     isLoginWaiting.value = false
 
     resetOverlayText()
+    gsap.set('.decor--center', { autoAlpha: 0 })
+    gsap.set('.hud--float', { autoAlpha: 1 })
 
     panelTimeline = gsap
       .timeline({
@@ -926,6 +928,7 @@
     pointer-events: none;
     margin-left: 440px;
     top: 10%;
+    filter: grayscale(0.8);
   }
 
   .media-panel::before,
@@ -1141,7 +1144,7 @@
   }
 
   .brand-lockup h1.headline--white .headline-hidden-prefix {
-    color: #ee5e0e;
+    color: #080808;
   }
 
   .decor {
