@@ -27,9 +27,7 @@
         <div class="media-panel__overlay" />
         <div class="media-panel__grid" />
         <div class="hud hud--right">
-          <span>09</span>
-          <span>357</span>
-          <span>9F</span>
+          <span v-for="(code, index) in rightHudCodes" :key="`${index}-${code}`">{{ code }}</span>
         </div>
       </div>
 
@@ -73,10 +71,10 @@
           >
             <span>Email</span>
             <input
+              v-model="loginEmail"
               type="email"
               autocomplete="email"
               spellcheck="false"
-              value="ben.aldrich@omc.com"
               @focus="cursorStore.setCursorWhite"
               @blur="cursorStore.setCursorBlack"
             />
@@ -89,7 +87,8 @@
           >
             <span>Password</span>
             <input
-              type="password"
+              v-model="loginPassword"
+              :type="isLoginFieldScanning ? 'text' : 'password'"
               autocomplete="current-password"
               @focus="cursorStore.setCursorWhite"
               @blur="cursorStore.setCursorBlack"
@@ -211,6 +210,12 @@
   const showGridWipe = ref(false)
   const showTerminalBackdrop = ref(false)
   const showLoading = ref(false)
+  const rightHudCodes = ref(['09', '357', '9F'])
+  const finalLoginEmail = 'ben.aldrich@omc.com'
+  const finalLoginPassword = '••••••••'
+  const loginEmail = ref(finalLoginEmail)
+  const loginPassword = ref('')
+  const isLoginFieldScanning = ref(false)
   const gridColumns = 36
   const gridRows = 27
   const gridCellCount = gridColumns * gridRows
@@ -226,10 +231,23 @@
   let authoriseTimeline: gsap.core.Timeline | null = null
   let headlineGlitchTimeline: gsap.core.Timeline | null = null
   let markerFadeTimeline: gsap.core.Timeline | null = null
+  let mediaGridTimeline: gsap.core.Timeline | null = null
   let dashboardRedirect: gsap.core.Tween | null = null
   let moveCursor: ((event: PointerEvent) => void) | null = null
   let hideCursor: (() => void) | null = null
+  let hudCodeInterval = 0
+  let hudCodeTimeout = 0
+  let hudCodeIndex = 0
+  let loginScanTimeouts: number[] = []
   const overlayTextTargets = '.brand-lockup, .orange-panel__center, .start-panel, .escape-row, .login-form'
+  const hudCodeSets = [
+    ['09', '357', '9F'],
+    ['12', '35A', 'A4'],
+    ['08', '362', 'C1'],
+    ['11', '40F', '7B'],
+    ['0D', '389', 'E2'],
+  ]
+  const hudCodeLengths = [2, 3, 2]
   const cursor = {
     active: false,
     currentX: 0,
@@ -247,6 +265,85 @@
   )
 
   const getExpandedPanelWidth = () => 'calc(100% + clamp(59px, 4.4vw, 88px))'
+
+  const getRandomHudCode = (length: number) => (
+    Array.from({ length }, () => Math.floor(Math.random() * 16).toString(16).toUpperCase()).join('')
+  )
+
+  const tickRightHudCodes = () => {
+    rightHudCodes.value = hudCodeLengths.map(getRandomHudCode)
+
+    if (hudCodeTimeout) window.clearTimeout(hudCodeTimeout)
+
+    hudCodeTimeout = window.setTimeout(() => {
+      hudCodeIndex = (hudCodeIndex + 1) % hudCodeSets.length
+      rightHudCodes.value = [...hudCodeSets[hudCodeIndex]]
+    }, 90)
+  }
+
+  const getScrambledText = (length: number) => {
+    const glyphs = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.#/+'
+    return Array.from({ length }, () => glyphs[Math.floor(Math.random() * glyphs.length)]).join('')
+  }
+
+  const clearLoginScanTimers = () => {
+    loginScanTimeouts.forEach(timeout => window.clearTimeout(timeout))
+    loginScanTimeouts = []
+  }
+
+  const scheduleLoginScanTimeout = (callback: () => void, delay: number) => {
+    const timeout = window.setTimeout(callback, delay)
+    loginScanTimeouts.push(timeout)
+  }
+
+  const decodeLoginValue = (
+    setter: (value: string) => void,
+    finalValue: string,
+    options: { delay?: number, masked?: boolean } = {},
+  ) => {
+    const frameCount = 9
+    const frameDuration = 42
+    const delay = options.delay ?? 0
+    const length = options.masked ? finalValue.length : finalValue.length
+
+    scheduleLoginScanTimeout(() => {
+      for (let frame = 0; frame <= frameCount; frame += 1) {
+        scheduleLoginScanTimeout(() => {
+          if (frame === frameCount) {
+            setter(finalValue)
+            return
+          }
+
+          if (options.masked) {
+            setter(getScrambledText(length))
+            return
+          }
+
+          const stableLength = Math.floor((frame / frameCount) * finalValue.length)
+          setter(`${finalValue.slice(0, stableLength)}${getScrambledText(finalValue.length - stableLength)}`)
+        }, frame * frameDuration)
+      }
+    }, delay)
+  }
+
+  const runLoginFieldScan = () => {
+    clearLoginScanTimers()
+    loginEmail.value = ''
+    loginPassword.value = ''
+    isLoginFieldScanning.value = true
+
+    decodeLoginValue(value => {
+      loginEmail.value = value
+    }, finalLoginEmail, { delay: 80 })
+
+    decodeLoginValue(value => {
+      loginPassword.value = value
+    }, finalLoginPassword, { delay: 220, masked: true })
+
+    scheduleLoginScanTimeout(() => {
+      isLoginFieldScanning.value = false
+    }, 760)
+  }
 
   const resetOverlayText = () => {
     gsap.set(overlayTextTargets, {
@@ -409,6 +506,30 @@
       .to('.decor--center', { autoAlpha: 1 }, 2)
   }
 
+  const createMediaGridTimeline = () => (
+    gsap
+      .timeline({
+        repeat: -1,
+        defaults: { ease: 'power2.inOut' },
+      })
+      .to({}, { duration: 4.5 })
+      .to('.media-panel__grid', {
+        duration: 0.8,
+        opacity: 0.58,
+        transform: 'perspective(520px) rotateX(61deg) rotateZ(-10deg) translate3d(-10px, -8px, 0) scale(1.025)',
+      })
+      .to('.media-panel__grid', {
+        duration: 0.36,
+        opacity: 0.5,
+        transform: 'perspective(540px) rotateX(55deg) rotateZ(-16deg) translate3d(8px, 5px, 0) scale(0.99)',
+      })
+      .to('.media-panel__grid', {
+        duration: 1.1,
+        opacity: 0.42,
+        transform: 'perspective(520px) rotateX(58deg) rotateZ(-13deg)',
+      })
+  )
+
   const openLoginPanel = async () => {
     if (!orangePanelRef.value || isPanelTransitioning.value || isLoginExpanded.value) return
 
@@ -455,6 +576,7 @@
         ease: 'power3.out',
         y: 0,
       }, 0.56)
+      .call(runLoginFieldScan, [], 0.7)
   }
 
   const closeLoginPanel = () => {
@@ -463,6 +585,8 @@
     cursorStore.setCursorBlack()
     authoriseTimeline?.kill()
     panelTimeline?.kill()
+    clearLoginScanTimers()
+    isLoginFieldScanning.value = false
     isPanelTransitioning.value = true
     isAuthorising.value = false
     isTerminalBlack.value = false
@@ -696,6 +820,8 @@
     }
 
     animationFrame = requestAnimationFrame(raf)
+    mediaGridTimeline = createMediaGridTimeline()
+    hudCodeInterval = window.setInterval(tickRightHudCodes, 1800)
 
     introTimeline = gsap
       .timeline({
@@ -717,9 +843,13 @@
     authoriseTimeline?.kill()
     headlineGlitchTimeline?.kill()
     markerFadeTimeline?.kill()
+    mediaGridTimeline?.kill()
     dashboardRedirect?.kill()
     cursorStore.setCursorBlack()
-    gsap.killTweensOf([orangePanelRef.value, closeButtonRef.value, '.brand-lockup h1', '.decor--center', '.login-form', '.terminal-loading', overlayTextTargets, '.hud--float'])
+    if (hudCodeInterval) window.clearInterval(hudCodeInterval)
+    if (hudCodeTimeout) window.clearTimeout(hudCodeTimeout)
+    clearLoginScanTimers()
+    gsap.killTweensOf([orangePanelRef.value, closeButtonRef.value, '.brand-lockup h1', '.decor--center', '.login-form', '.media-panel__grid', '.terminal-loading', overlayTextTargets, '.hud--float'])
     lenis?.destroy()
     cancelAnimationFrame(animationFrame)
     videoRef.value?.removeEventListener('loadedmetadata', setVideoPlaybackSpeed)
