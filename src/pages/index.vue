@@ -935,7 +935,7 @@
     addGlitchOut(authoriseTimeline, '.terminal-loading', '+=2')
 
     authoriseTimeline.add(() => {
-      dashboardRedirect = gsap.delayedCall(0.35, () => {
+      dashboardRedirect = gsap.delayedCall(1, () => {
         router.push('/dashboard')
       })
     })
@@ -1184,10 +1184,11 @@
   }
 
   .cursor-ident--white .cursor-ident__ring {
-    animation-duration: 14s;
+    animation: cursor-ring-spin 14s linear infinite, cursor-white-ring-pulse 1.22s ease-in-out infinite;
   }
 
   .cursor-ident--white .cursor-ident__core {
+    animation: cursor-white-core-pulse 1.25s ease-in-out infinite;
     opacity: 0.25;
   }
 
@@ -1220,6 +1221,10 @@
     border-radius: 50%;
     filter: drop-shadow(0 0 8px color-mix(in srgb, currentColor 30%, transparent));
     mask: radial-gradient(circle, transparent 0 51%, #000 52% 100%);
+    scale: var(--cursor-ring-scale);
+    transform: none;
+    transform-origin: center;
+    translate: -50% -50%;
   }
 
   .cursor-ident__ring::before,
@@ -1259,11 +1264,11 @@
 
   @keyframes cursor-ring-spin {
     from {
-      transform: translate(-50%, -50%) rotate(0deg) scale(var(--cursor-ring-scale));
+      rotate: 0deg;
     }
 
     to {
-      transform: translate(-50%, -50%) rotate(360deg) scale(var(--cursor-ring-scale));
+      rotate: 360deg;
     }
   }
 
@@ -1278,6 +1283,33 @@
 
     100% {
       transform: rotate(360deg) scale(1);
+    }
+  }
+
+  @keyframes cursor-white-ring-pulse {
+    0% {
+      scale: 0.62;
+    }
+
+    50% {
+      scale: 0.72;
+    }
+
+    100% {
+      scale: 0.62;
+    }
+  }
+
+  @keyframes cursor-white-core-pulse {
+    0%,
+    100% {
+      transform: translate(-50%, -50%) scale(0.65);
+      opacity: 0.25;
+    }
+
+    50% {
+      transform: translate(-50%, -50%) scale(0.9);
+      opacity: 0.42;
     }
   }
 
