@@ -13,13 +13,27 @@
       <span class="cursor-ident__core" />
     </div>
 
+    <div v-if="showBootOverlay" class="boot-overlay" aria-hidden="true">
+      <div class="boot-terminal">
+        <div class="boot-line">
+          <span>{{ bootText }}</span>
+          <span class="boot-cursor" />
+        </div>
+        <div class="boot-progress">
+          <span class="boot-progress__bar" />
+        </div>
+      </div>
+      <div class="boot-slices" aria-hidden="true">
+        <span v-for="slice in 12" :key="slice" />
+      </div>
+    </div>
+
     <section ref="heroRef" class="launch-hero" aria-labelledby="hero-title">
       <div v-show="!isTerminalBlack" class="media-panel" aria-hidden="true">
         <video
           ref="videoRef"
           class="media-panel__video"
           :src="bgVideo"
-          autoplay
           muted
           loop
           playsinline
@@ -207,6 +221,8 @@
   const isTerminalBlack = ref(false)
   const isPanelTransitioning = ref(false)
   const isCursorActive = ref(false)
+  const showBootOverlay = ref(true)
+  const bootText = ref('')
   const showGridWipe = ref(false)
   const showTerminalBackdrop = ref(false)
   const showLoading = ref(false)
@@ -226,6 +242,7 @@
 
   let lenis: Lenis | null = null
   let animationFrame = 0
+  let bootTimeline: gsap.core.Timeline | null = null
   let introTimeline: gsap.core.Timeline | null = null
   let panelTimeline: gsap.core.Timeline | null = null
   let authoriseTimeline: gsap.core.Timeline | null = null
@@ -238,6 +255,7 @@
   let hudCodeInterval = 0
   let hudCodeTimeout = 0
   let hudCodeIndex = 0
+  let bootTextTimeouts: number[] = []
   let loginScanTimeouts: number[] = []
   const overlayTextTargets = '.brand-lockup, .orange-panel__center, .start-panel, .escape-row, .login-form'
   const hudCodeSets = [
@@ -265,6 +283,24 @@
   )
 
   const getExpandedPanelWidth = () => 'calc(100% + clamp(59px, 4.4vw, 88px))'
+
+  const clearBootTextTimers = () => {
+    bootTextTimeouts.forEach(timeout => window.clearTimeout(timeout))
+    bootTextTimeouts = []
+  }
+
+  const typeBootText = (value: string, frameDuration = 56) => {
+    clearBootTextTimers()
+    bootText.value = ''
+
+    Array.from(value).forEach((character, index) => {
+      const timeout = window.setTimeout(() => {
+        bootText.value += character
+      }, index * frameDuration)
+
+      bootTextTimeouts.push(timeout)
+    })
+  }
 
   const getRandomHudCode = (length: number) => (
     Array.from({ length }, () => Math.floor(Math.random() * 16).toString(16).toUpperCase()).join('')
@@ -530,6 +566,139 @@
       })
   )
 
+  const setMainIntroStartState = () => {
+    gsap.set('.media-panel', { autoAlpha: 0 })
+    gsap.set(orangePanelRef.value, { xPercent: -100 })
+    gsap.set('.brand-lockup h1', { yPercent: 115, opacity: 0 })
+    gsap.set('.logo-tab img', { autoAlpha: 0, scale: 0.92 })
+    gsap.set('.decor, .start-panel, .escape-row', { autoAlpha: 0, y: 18 })
+  }
+
+  const startMainIntro = () => {
+    mediaGridTimeline = createMediaGridTimeline()
+    hudCodeInterval = window.setInterval(tickRightHudCodes, 1800)
+    gsap.to('.media-panel', {
+      autoAlpha: 1,
+      delay: 0.3,
+      duration: 0.32,
+      ease: 'power2.out',
+      onStart: () => {
+        videoRef.value?.play()
+      },
+    })
+
+    introTimeline = gsap
+      .timeline({
+        defaults: { duration: 1, ease: 'power3.out' },
+        onComplete: () => {
+          headlineGlitchTimeline = createHeadlineGlitchTimeline()
+          markerFadeTimeline = createMarkerFadeTimeline()
+        },
+      })
+      .to(orangePanelRef.value, { xPercent: 0 })
+      .to('.brand-lockup h1', { yPercent: 0, opacity: 1 }, '-=0.45')
+      .to('.logo-tab img', { autoAlpha: 1, scale: 1 }, '<')
+      .to('.decor, .start-panel, .escape-row', { autoAlpha: 1, y: 0, stagger: 0.08 }, '-=0.35')
+  }
+
+  const createBootTimeline = () => (
+    gsap
+      .timeline({
+        defaults: { ease: 'power3.inOut' },
+        onComplete: () => {
+          showBootOverlay.value = false
+          startMainIntro()
+        },
+      })
+      .set('.boot-progress__bar', { scaleX: 0 })
+      .set('.boot-slices span', { autoAlpha: 0, xPercent: -100 })
+      .set('.boot-terminal', { autoAlpha: 1, filter: 'contrast(1)' })
+      .call(() => typeBootText('INITIALISING...'))
+      .to('.boot-progress__bar', {
+        duration: 0.72,
+        ease: 'power2.out',
+        scaleX: 0.37,
+      }, '+=0.18')
+      .to('.boot-progress__bar', {
+        duration: 0.2,
+        ease: 'steps(1)',
+        scaleX: 0.37,
+      })
+      .to('.boot-progress__bar', {
+        duration: 0.5,
+        ease: 'power2.inOut',
+        scaleX: 0.82,
+      })
+      .call(() => {
+        bootText.value = 'SYNCING SSO SHELL'
+      })
+      .to('.boot-line', {
+        clipPath: 'polygon(0 0, 100% 0, 100% 38%, 0 38%, 0 58%, 100% 58%, 100% 100%, 0 100%)',
+        duration: 0.06,
+        filter: 'contrast(2.4)',
+        skewX: -8,
+        x: -14,
+      })
+      .call(() => {
+        bootText.value = 'CHECKING VECTOR GRID'
+      })
+      .to('.boot-line', {
+        clipPath: 'polygon(0 12%, 100% 12%, 100% 28%, 0 28%, 0 62%, 100% 62%, 100% 78%, 0 78%)',
+        duration: 0.06,
+        skewX: 8,
+        x: 14,
+      })
+      .call(() => {
+        bootText.value = 'LOADING REFORGE'
+      })
+      .to('.boot-progress__bar', {
+        duration: 0.42,
+        ease: 'power2.out',
+        scaleX: 1,
+      }, '<')
+      .to('.boot-line', {
+        clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)',
+        duration: 0.08,
+        filter: 'contrast(1)',
+        skewX: 0,
+        x: 0,
+      })
+      .to({}, { duration: 1 })
+      .to('.boot-terminal', {
+        clipPath: 'polygon(0 0, 100% 0, 100% 18%, 0 18%, 0 42%, 100% 42%, 100% 54%, 0 54%, 0 100%, 100% 100%, 100% 100%, 0 100%)',
+        duration: 0.08,
+        filter: 'contrast(3)',
+        skewX: -10,
+        x: -18,
+      }, '+=0.28')
+      .to('.boot-terminal', {
+        clipPath: 'polygon(0 8%, 100% 8%, 100% 22%, 0 22%, 0 62%, 100% 62%, 100% 82%, 0 82%)',
+        duration: 0.07,
+        skewX: 12,
+        x: 24,
+      })
+      .to('.boot-slices span', {
+        autoAlpha: 1,
+        duration: 0.08,
+        stagger: {
+          amount: 0.12,
+          from: 'random',
+        },
+        xPercent: 0,
+      }, '<')
+      .to('.boot-terminal', {
+        autoAlpha: 0,
+        clipPath: 'polygon(0 50%, 100% 50%, 100% 50%, 0 50%)',
+        duration: 0.08,
+        x: 0,
+      })
+      .to('.boot-overlay', {
+        autoAlpha: 0,
+        duration: 0.42,
+        ease: 'power3.in',
+      }, '-=0.02')
+  )
+
   const openLoginPanel = async () => {
     if (!orangePanelRef.value || isPanelTransitioning.value || isLoginExpanded.value) return
 
@@ -775,6 +944,7 @@
   onMounted(() => {
     const supportsFinePointer = window.matchMedia('(pointer: fine)').matches
     setVideoPlaybackSpeed()
+    videoRef.value?.pause()
     videoRef.value?.addEventListener('loadedmetadata', setVideoPlaybackSpeed)
 
     lenis = new Lenis({
@@ -820,24 +990,12 @@
     }
 
     animationFrame = requestAnimationFrame(raf)
-    mediaGridTimeline = createMediaGridTimeline()
-    hudCodeInterval = window.setInterval(tickRightHudCodes, 1800)
-
-    introTimeline = gsap
-      .timeline({
-        defaults: { duration: 1, ease: 'power3.out' },
-        onComplete: () => {
-          headlineGlitchTimeline = createHeadlineGlitchTimeline()
-          markerFadeTimeline = createMarkerFadeTimeline()
-        },
-      })
-      .from(orangePanelRef.value, { xPercent: -100 })
-      .from('.brand-lockup h1', { yPercent: 115, opacity: 0 }, '-=0.45')
-      .from('.logo-tab img', { autoAlpha: 0, scale: 0.92 }, '<')
-      .from('.decor, .start-panel, .escape-row', { autoAlpha: 0, y: 18, stagger: 0.08 }, '-=0.35')
+    setMainIntroStartState()
+    bootTimeline = createBootTimeline()
   })
 
   onBeforeUnmount(() => {
+    bootTimeline?.kill()
     introTimeline?.kill()
     panelTimeline?.kill()
     authoriseTimeline?.kill()
@@ -848,8 +1006,9 @@
     cursorStore.setCursorBlack()
     if (hudCodeInterval) window.clearInterval(hudCodeInterval)
     if (hudCodeTimeout) window.clearTimeout(hudCodeTimeout)
+    clearBootTextTimers()
     clearLoginScanTimers()
-    gsap.killTweensOf([orangePanelRef.value, closeButtonRef.value, '.brand-lockup h1', '.decor--center', '.login-form', '.media-panel__grid', '.terminal-loading', overlayTextTargets, '.hud--float'])
+    gsap.killTweensOf([orangePanelRef.value, closeButtonRef.value, '.boot-overlay', '.boot-terminal', '.boot-line', '.boot-progress__bar', '.boot-slices span', '.brand-lockup h1', '.decor--center', '.login-form', '.media-panel', '.media-panel__grid', '.terminal-loading', overlayTextTargets, '.hud--float'])
     lenis?.destroy()
     cancelAnimationFrame(animationFrame)
     videoRef.value?.removeEventListener('loadedmetadata', setVideoPlaybackSpeed)
@@ -872,6 +1031,128 @@
 
   :global(.v-main) {
     --v-layout-top: 0px;
+  }
+
+  .boot-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: grid;
+    overflow: hidden;
+    place-items: center;
+    background: #050506;
+    color: #ee5e0e;
+    isolation: isolate;
+  }
+
+  .boot-overlay::before,
+  .boot-overlay::after {
+    position: absolute;
+    inset: 0;
+    content: '';
+    pointer-events: none;
+  }
+
+  .boot-overlay::before {
+    z-index: 0;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        rgba(255, 255, 255, 0.035) 0 1px,
+        transparent 1px 5px
+      );
+    opacity: 0.6;
+  }
+
+  .boot-overlay::after {
+    z-index: 1;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(238, 94, 14, 0.12), transparent 34%),
+      linear-gradient(90deg, rgba(238, 94, 14, 0.08), transparent 24%, transparent 76%, rgba(238, 94, 14, 0.08));
+    mix-blend-mode: screen;
+  }
+
+  .boot-terminal {
+    position: relative;
+    z-index: 3;
+    display: grid;
+    width: min(560px, calc(100vw - 48px));
+    gap: 18px;
+    justify-items: center;
+    font-family: monospace;
+    font-size: clamp(0.8rem, 1.6vw, 1.32rem);
+    font-weight: 900;
+    letter-spacing: 0;
+    line-height: 1;
+    text-transform: uppercase;
+    will-change: clip-path, filter, opacity, transform;
+  }
+
+  .boot-line {
+    display: inline-flex;
+    min-height: 1.4em;
+    align-items: center;
+    justify-content: center;
+    color: #f2f2f2;
+    gap: 8px;
+    text-align: center;
+    will-change: clip-path, filter, transform;
+  }
+
+  .boot-cursor {
+    width: 10px;
+    height: 1.08em;
+    background: #ffffff;
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.7);
+    animation: boot-cursor-blink 0.7s steps(1) infinite;
+  }
+
+  .boot-progress {
+    width: min(420px, 72vw);
+    height: 7px;
+    overflow: hidden;
+    background:
+      linear-gradient(90deg, rgba(238, 94, 14, 0.16), rgba(238, 94, 14, 0.04));
+    box-shadow: inset 0 0 0 1px rgba(238, 94, 14, 0.34);
+  }
+
+  .boot-progress__bar {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #ee5e0e;
+    box-shadow: 0 0 22px rgba(238, 94, 14, 0.8);
+    transform: scaleX(0);
+    transform-origin: left center;
+  }
+
+  .boot-slices {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    grid-template-rows: repeat(12, 1fr);
+    pointer-events: none;
+  }
+
+  .boot-slices span {
+    display: block;
+    background:
+      linear-gradient(90deg, rgba(238, 94, 14, 0.92), rgba(255, 255, 255, 0.72), rgba(238, 94, 14, 0.2));
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+
+  @keyframes boot-cursor-blink {
+    0%,
+    48% {
+      opacity: 1;
+    }
+
+    49%,
+    100% {
+      opacity: 0;
+    }
   }
 
   .cursor-ident {
@@ -1027,8 +1308,8 @@
   .launch-page {
     min-height: 100vh;
     overflow: hidden;
-    background: #090b10;
-    color: #101010;
+    background: #080808;
+    color: #080808;
     font-family: 'Roboto Condensed', 'Roboto', Arial, sans-serif;
   }
 
@@ -1036,7 +1317,7 @@
     position: relative;
     min-height: 100svh;
     overflow: hidden;
-    background: #10141d;
+    background: #080808;
   }
 
   .media-panel {
